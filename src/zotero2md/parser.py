@@ -1,9 +1,19 @@
-class ZoteroParser:
-    def __init__(self, conn):
-        self.conn = conn
-        self._attachment_cache = {}
+import logging
+from zotero2md.query_cache import QueryCache
+from zotero2md.logger import get_logger
 
-    def get_all_items(self):
+
+class ZoteroParser:
+    def __init__(self, connector):
+        self.connector = connector
+        self._attachment_cache = {}
+        self.query_cache = QueryCache(max_size=1000)
+        self.logger = get_logger(__name__)
+    
+    def _get_conn(self):
+        return self.connector.connect()
+
+    def get_all_items(self, batch_size=1000):
         query = """
         SELECT i.itemID, i.key, it.typeName
         FROM items i
@@ -12,11 +22,21 @@ class ZoteroParser:
           AND i.itemID NOT IN (SELECT itemID FROM itemNotes)
           AND i.itemID NOT IN (SELECT itemID FROM deletedItems)
         """
-        cursor = self.conn.cursor()
+        cursor = self._get_conn().cursor()
         cursor.execute(query)
-        return cursor.fetchall()
+        
+        while True:
+            batch = cursor.fetchmany(batch_size)
+            if not batch:
+                break
+            yield [dict(row) for row in batch]
 
     def get_item_metadata(self, item_id):
+        cache_key = f"metadata_{item_id}"
+        cached = self.query_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        
         query = """
         SELECT f.fieldName, idv.value
         FROM itemData id
@@ -24,26 +44,41 @@ class ZoteroParser:
         JOIN itemDataValues idv ON id.valueID = idv.valueID
         WHERE id.itemID = ?
         """
-        cursor = self.conn.cursor()
+        cursor = self._get_conn().cursor()
         cursor.execute(query, (item_id,))
         
         metadata = {}
         for row in cursor.fetchall():
             metadata[row['fieldName']] = row['value']
+        
+        self.query_cache.set(cache_key, metadata)
         return metadata
 
     def get_item_tags(self, item_id):
+        cache_key = f"tags_{item_id}"
+        cached = self.query_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        
         query = """
         SELECT t.name
         FROM itemTags it
         JOIN tags t ON it.tagID = t.tagID
         WHERE it.itemID = ?
         """
-        cursor = self.conn.cursor()
+        cursor = self._get_conn().cursor()
         cursor.execute(query, (item_id,))
-        return [row['name'] for row in cursor.fetchall()]
+        tags = [row['name'] for row in cursor.fetchall()]
+        
+        self.query_cache.set(cache_key, tags)
+        return tags
 
     def get_item_creators(self, item_id):
+        cache_key = f"creators_{item_id}"
+        cached = self.query_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        
         query = """
         SELECT c.firstName, c.lastName, ct.creatorType
         FROM itemCreators ic
@@ -52,7 +87,7 @@ class ZoteroParser:
         WHERE ic.itemID = ?
         ORDER BY ic.orderIndex
         """
-        cursor = self.conn.cursor()
+        cursor = self._get_conn().cursor()
         cursor.execute(query, (item_id,))
         
         creators = []
@@ -62,6 +97,8 @@ class ZoteroParser:
                 'name': name,
                 'type': row['creatorType']
             })
+        
+        self.query_cache.set(cache_key, creators)
         return creators
 
     def get_item_notes(self, parent_item_id, convert_html=False):
@@ -70,7 +107,7 @@ class ZoteroParser:
         FROM itemNotes
         WHERE parentItemID = ?
         """
-        cursor = self.conn.cursor()
+        cursor = self._get_conn().cursor()
         cursor.execute(query, (parent_item_id,))
         notes = [row['note'] for row in cursor.fetchall()]
         
@@ -92,7 +129,7 @@ class ZoteroParser:
         FROM itemAttachments ia
         WHERE ia.parentItemID = ?
         """
-        cursor = self.conn.cursor()
+        cursor = self._get_conn().cursor()
         cursor.execute(query, (parent_item_id,))
         
         attachments = []
@@ -114,7 +151,7 @@ class ZoteroParser:
         JOIN collections c ON ci.collectionID = c.collectionID
         WHERE ci.itemID = ?
         """
-        cursor = self.conn.cursor()
+        cursor = self._get_conn().cursor()
         cursor.execute(query, (item_id,))
         return [row['collectionName'] for row in cursor.fetchall()]
 

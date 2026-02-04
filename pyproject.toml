@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zotero2md"
+version = "0.1.0"
+description = "Zotero to Markdown Export Tool"
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = [
+    "zotero",
+    "markdown",
+    "export",
+    "obsidian",
+    "logseq",
+    "bibtex",
+    "json",
+    "csv"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Text Processing",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "jinja2>=3.0",
+    "pyyaml>=5.0",
+    "html2text>=2020.0",
+    "requests>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+zotero2md = "zotero2md.main:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/zotero2md"
+Repository = "https://github.com/yourusername/zotero2md"
+Issues = "https://github.com/yourusername/zotero2md/issues"

@@ -4,6 +4,7 @@ import platform
 import shutil
 import tempfile
 from pathlib import Path
+import threading
 
 class ZoteroConnector:
     """Zotero 本地数据库连接器"""
@@ -14,6 +15,7 @@ class ZoteroConnector:
             raise FileNotFoundError("无法找到 Zotero 数据库文件。请手动指定路径。")
         self.conn = None
         self.temp_db = None
+        self._local = threading.local()
 
     @staticmethod
     def find_zotero_db():
@@ -52,17 +54,18 @@ class ZoteroConnector:
     def connect(self):
         """建立连接（通过临时副本以避免数据库锁定）"""
         try:
-            # 创建临时文件
-            fd, self.temp_db = tempfile.mkstemp(suffix=".sqlite")
-            os.close(fd)
-            
-            # 复制数据库文件
-            shutil.copy2(self.database_path, self.temp_db)
-            
-            # 连接到临时数据库
-            self.conn = sqlite3.connect(self.temp_db)
-            self.conn.row_factory = sqlite3.Row
-            return self.conn
+            if not hasattr(self._local, 'conn') or self._local.conn is None:
+                # 创建临时文件
+                fd, self.temp_db = tempfile.mkstemp(suffix=".sqlite")
+                os.close(fd)
+                
+                # 复制数据库文件
+                shutil.copy2(self.database_path, self.temp_db)
+                
+                # 连接到临时数据库
+                self._local.conn = sqlite3.connect(self.temp_db)
+                self._local.conn.row_factory = sqlite3.Row
+            return self._local.conn
         except Exception as e:
             print(f"连接 Zotero 数据库失败: {e}")
             self.cleanup()
